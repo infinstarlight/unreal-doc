@@ -22,6 +22,19 @@ Fear not - this tool understands Unreal C++ header files syntax and Markdown doc
 can also bake a book pages out of Markdown files, all of that being able to cross-reference
 each other!
 
+### Compatibility with Unreal coding style
+
+`unreal-doc` reads headers directly; it does not run `clang-format` or require projects to use
+the `.clang-format` file bundled with the example resources. The parser accepts common Unreal
+style constructs such as tab-indented declarations, decorative `////` separator comments,
+namespace-wrapped declarations, and metadata values containing lists (for example
+`hidecategories=(Object, Scoring)`).
+
+The parser is intentionally not a complete C++ compiler. When a header uses syntax outside the
+supported Unreal header subset, the command reports the file and parser location rather than
+silently omitting the declaration. Use the reported location to isolate unsupported syntax; the
+source file itself does not need to be reformatted to the example style.
+
 ## Installation
 
 - Installation using `cargo-install` from [Rust toolset](https://rustup.rs/):

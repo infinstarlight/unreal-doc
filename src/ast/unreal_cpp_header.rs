@@ -42,8 +42,17 @@ fn parse_unreal_cpp_element(
 }
 
 fn parse_file(pair: Pair<Rule>, document: &mut Document, settings: &Settings) {
-    for pair in pair.into_inner() {
+    parse_items(pair.into_inner(), document, settings);
+}
+
+fn parse_items<'a>(
+    pairs: impl Iterator<Item = Pair<'a, Rule>>,
+    document: &mut Document,
+    settings: &Settings,
+) {
+    for pair in pairs {
         match pair.as_rule() {
+            Rule::namespace => parse_items(pair.into_inner(), document, settings),
             Rule::proxy => parse_proxy(pair, settings, document),
             Rule::snippet => parse_snippet(pair, document),
             Rule::element => match parse_element(pair, Visibility::Public, settings, document) {
@@ -244,7 +253,7 @@ fn parse_specifiers(pair: Pair<Rule>) -> Specifiers {
                     let mut pairs = pair.into_inner();
                     result.attributes.push(Attribute::Pair {
                         key: parse_identifier(pairs.next().unwrap()),
-                        value: parse_identifier(pairs.next().unwrap()),
+                        value: pairs.next().unwrap().as_str().to_owned(),
                     })
                 }
                 Rule::specifier_meta => parse_specifier_meta(pair, &mut result),
@@ -265,7 +274,7 @@ fn parse_specifier_meta(pair: Pair<Rule>, result: &mut Specifiers) {
                 let mut pairs = pair.into_inner();
                 result.meta.push(Attribute::Pair {
                     key: parse_identifier(pairs.next().unwrap()),
-                    value: parse_identifier(pairs.next().unwrap()),
+                    value: pairs.next().unwrap().as_str().to_owned(),
                 })
             }
             _ => {}
@@ -535,4 +544,46 @@ fn test_parsing() {
     let mut document = Document::default();
     parse_unreal_cpp_header(&content, &mut document, &Default::default())
         .unwrap_or_else(|error| panic!("Error parsing C++ header: {}", error));
+}
+
+#[test]
+fn test_parsing_common_epic_style_constructs() {
+    let content = r#"//////////////////////////////////////////////////////////////////////
+// Colony settings
+//////////////////////////////////////////////////////////////////////
+namespace Colony
+{
+UCLASS(Abstract, Blueprintable, hidecategories=(Object, Scoring))
+class UColonySettings
+{
+public:
+	/// Returns the current settings.
+	void GetSettings() const;
+};
+}
+"#;
+    let mut document = Document::default();
+
+    parse_unreal_cpp_header(content, &mut document, &Default::default())
+        .unwrap_or_else(|error| panic!("Error parsing Epic-style C++ header: {}", error));
+
+    assert_eq!(document.classes.len(), 1);
+    assert_eq!(document.classes[0].name, "UColonySettings");
+    let specifiers = document.classes[0].specifiers.as_ref().unwrap();
+    assert_eq!(
+        specifiers.attributes[2],
+        Attribute::Pair {
+            key: "hidecategories".to_owned(),
+            value: "(Object, Scoring)".to_owned()
+        }
+    );
+}
+
+#[test]
+fn test_parsing_reports_malformed_input() {
+    let mut document = Document::default();
+    let error = parse_unreal_cpp_header("UCLASS(\n", &mut document, &Default::default())
+        .expect_err("malformed input should be rejected");
+
+    assert!(error.to_string().contains("expected"));
 }

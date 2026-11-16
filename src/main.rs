@@ -15,7 +15,7 @@ use crate::{
 use clap::{Arg, Command};
 use std::{
     fs::{create_dir_all, read_to_string},
-    io::Result,
+    io::Result as IoResult,
     path::{Path, PathBuf},
 };
 
@@ -56,7 +56,10 @@ fn main() {
 
     let mut document = Document::default();
     for path in &config.input_dirs {
-        document_path(path, path, &mut document, &config.settings);
+        if let Err(error) = document_path(path, path, &mut document, &config.settings) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
     }
     document.resolve_injects();
     document.resolve_self_names_in_docs();
@@ -107,14 +110,19 @@ fn load_config(input: &Path, output: Option<&Path>) -> (Config, PathBuf) {
     (config, dir)
 }
 
-fn document_path(path: &Path, root: &Path, document: &mut Document, settings: &Settings) {
+fn document_path(
+    path: &Path,
+    root: &Path,
+    document: &mut Document,
+    settings: &Settings,
+) -> Result<(), String> {
     if path.is_file() {
         if let Some(ext) = path.extension() {
             if ext == "h" {
                 let path = path.canonicalize().unwrap_or_else(|_| path.to_owned());
                 let content =
                     read_file(&path).unwrap_or_else(|_| panic!("Could not read file: {:?}", &path));
-                document_header(&path, &content, document, settings);
+                document_header(&path, &content, document, settings)?;
             } else if ext == "md" {
                 let content =
                     read_file(path).unwrap_or_else(|_| panic!("Could not read file: {:?}", path));
@@ -149,18 +157,24 @@ fn document_path(path: &Path, root: &Path, document: &mut Document, settings: &S
             .unwrap_or_else(|_| panic!("Could not read directory: {:?}", path))
         {
             let path = entry.expect("Could not read directory entry!").path();
-            document_path(&path, root, document, settings);
+            document_path(&path, root, document, settings)?;
         }
     }
+    Ok(())
 }
 
-fn document_header(path: &Path, content: &str, document: &mut Document, settings: &Settings) {
-    parse_unreal_cpp_header(content, document, settings).unwrap_or_else(|error| {
-        panic!(
+fn document_header(
+    path: &Path,
+    content: &str,
+    document: &mut Document,
+    settings: &Settings,
+) -> Result<(), String> {
+    parse_unreal_cpp_header(content, document, settings).map_err(|error| {
+        format!(
             "Could not parse Unreal C++ header file content!\nFile: {:?}\nError:\n{}",
             path, error
         )
-    });
+    })
 }
 
 fn ensure_dir(path: &Path) {
@@ -173,7 +187,7 @@ fn ensure_dir(path: &Path) {
     }
 }
 
-fn read_file(path: impl AsRef<Path>) -> Result<String> {
+fn read_file(path: impl AsRef<Path>) -> IoResult<String> {
     let content = read_to_string(path)?;
     if content.starts_with(BOM) {
         Ok(content.chars().skip(1).collect())

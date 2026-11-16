@@ -84,7 +84,7 @@ pub struct Specifiers {
     pub meta: Vec<Attribute>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Attribute {
     Single(String),
     Pair { key: String, value: String },

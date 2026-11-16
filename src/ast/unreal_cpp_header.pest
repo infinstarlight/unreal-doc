@@ -1,4 +1,6 @@
-file                             =  { SOI ~ ((proxy | preprocessor | snippet | using | forward_declaration | element | macro_call | identifier) ~ ows)* ~ EOI }
+file                             =  { SOI ~ ((namespace | proxy | preprocessor | snippet | using_namespace | using | forward_declaration | element | macro_call | identifier) ~ ows)* ~ EOI }
+namespace                        =  { "namespace" ~ (mws ~ identifier)? ~ ows ~ "{" ~ ows ~ namespace_item* ~ ows ~ "}" }
+namespace_item                   = _{ namespace | proxy | preprocessor | snippet | using_namespace | using | forward_declaration | element | macro_call | identifier }
 ignore                           = @{ ignore_start ~ ignore_inner ~ ignore_end }
 ignore_start                     = @{ "////" ~ ows ~ "[" ~ ows ~ "ignore" ~ ows ~ "]" }
 ignore_end                       = @{ "////" ~ ows ~ "[" ~ ows ~ "/" ~ ows ~ "ignore" ~ ows ~ "]" }
@@ -18,6 +20,7 @@ snippet_inner                    = @{ (!snippet_end ~ ANY)* }
 preprocessor                     = _{ "#" ~ (("\\" ~ NEWLINE+ ~ ANY) | (!NEWLINE ~ ANY))* ~ NEWLINE }
 forward_declaration              =  { (enum_signature | class_signature | struct_signature | function_signature) ~ ows ~ ";" }
 using                            =  { "using" ~ mws ~ identifier ~ ows ~ "=" ~ ows ~ (!";" ~ ANY)+ ~ ";" }
+using_namespace                  =  { "using" ~ mws ~ "namespace" ~ mws ~ path ~ ows ~ ";" }
 doc_comment_line                 =  { !"////" ~ "///" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 doc_comment_lines                = @{ (ows ~ doc_comment_line)+ }
 element                          =  { doc_comment_lines? ~ ows ~ (element_enum | element_class | element_struct | element_function | element_property | preprocessor) }
@@ -80,7 +83,9 @@ specifier_meta                   =  { ^"meta" ~ ows ~ "=" ~ ows ~ specifier_list
 specifier_list                   = _{ "(" ~ ows ~ specifier_element ~ ows ~ ("," ~ ows ~ specifier_element)* ~ ")" }
 specifier_element                = _{ specifier_pair | specifier_single }
 specifier_pair                   =  { identifier ~ ows ~ "=" ~ ows ~ specifier_value }
-specifier_value                  = _{ string | identifier }
+specifier_value                  = { string | specifier_value_list | identifier }
+specifier_value_list             = { "(" ~ ows ~ (specifier_value_atom ~ ows ~ ("," ~ ows ~ specifier_value_atom ~ ows)*)? ~ ")" }
+specifier_value_atom             = _{ string | identifier }
 specifier_single                 =  { identifier }
 value_type                       =  { (constness ~ mws)? ~ (dependentness ~ (ows ~ unpackness)? ~ ows)? ~ (array_type | template_type | function_type | path) ~ ows ~ (pointer_type | reference_type)* ~ (ows ~ unpackness)? }
 function_type                    =  { path ~ "(" ~ (ows ~ function_type_arguments)* ~ ows ~ ")" }
@@ -110,7 +115,9 @@ string_char                      =  { !"\"" ~ ANY }
 ASCII_ALPHANUMERIC_UPPER         = _{ ASCII_DIGIT | ASCII_ALPHA_UPPER }
 COMMENT                          = _{ ignore | comment_block | comment_line }
 comment_block                    = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
-comment_line                     = _{ !("////" | "///") ~ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE+ }
+comment_line                     = _{ separator_comment | regular_comment }
+separator_comment                 = _{ "////" ~ "/"* ~ NEWLINE+ }
+regular_comment                   = _{ !("///" | "////") ~ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE+ }
 identifier                       = @{ identifier_start ~ identifier_continue* ~ !identifier_continue }
 identifier_start                 =  { ASCII_ALPHA | "_" }
 identifier_continue              =  { ASCII_ALPHANUMERIC | "_" }
